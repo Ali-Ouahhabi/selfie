@@ -1573,6 +1573,7 @@ char*    replace_extension(char* filename, uint64_t e);
 uint64_t monster(uint64_t* to_context);
 
 uint64_t is_boot_level_zero();
+void     boot_loader();
 
 uint64_t selfie_run(uint64_t machine);
 
@@ -2142,14 +2143,11 @@ void put_character(uint64_t c) {
 
 void print(char* s) {
   uint64_t i;
-  //printf(" print procedure\n");
-  //printf(" print procedure with argument %s \n",s);
-  //sleep(2);
+
   if (s == (char*) 0)
     print("NULL");
   else {
     i = 0;
-   // printf(" print procedure \n");
     while (load_character(s, i) != 0) {
      // printf(" in while of print \n");
       put_character(load_character(s, i));
@@ -2985,14 +2983,6 @@ void create_symbol_table_entry(uint64_t which_table, char* string, uint64_t line
   set_type(new_entry, type);
   set_value(new_entry, value);
   set_address(new_entry, address);
-/*
-  print(" creade_symbol_table_entry \n" );
-  printf1("\t string  %s\n",(char *) string);
-  printf1("\t line    %s\n",(char *) line );
-  //printf1("\t class   %s\n",(char *) class);
-  //printf1("\t type    %s\n",(char *) type);
-  printf1("\t value   %s\n",(char *) value);
-  printf1("\t address %s\n",(char *) address);*/
 
   // create entry at head of list of symbols
   if (which_table == GLOBAL_TABLE) {
@@ -5377,7 +5367,6 @@ uint64_t load_instruction(uint64_t baddr) {
 
 void store_instruction(uint64_t baddr, uint64_t instruction) {
   uint64_t temp;
-  //print("store INSTRUCTION");
   if (baddr >= MAX_CODE_LENGTH) {
     syntax_error_message("maximum code length exceeded");
 
@@ -5394,7 +5383,6 @@ void store_instruction(uint64_t baddr, uint64_t instruction) {
     temp = left_shift(instruction, WORDSIZEINBITS) + get_low_word(temp);
 
   *(binary + baddr / REGISTERSIZE) = temp;
-  //print(" end of store INSTRUCTION\n");
 }
 
 uint64_t load_data(uint64_t baddr) {
@@ -5412,16 +5400,11 @@ void store_data(uint64_t baddr, uint64_t data) {
 }
 
 void emit_instruction(uint64_t instruction) {
-  //print(" in to emit_instruction \n");
   store_instruction(binary_length, instruction);
-  //print("1\n");
   if (*(code_line_number + binary_length / INSTRUCTIONSIZE) == 0)
     *(code_line_number + binary_length / INSTRUCTIONSIZE) = line_number;
-  //print("2\n");
   binary_length = binary_length + INSTRUCTIONSIZE;
 
- // printf1(" line %d \t:",line_number);
- //printf1("%x\n",instruction);
 }
 
 void emit_nop() {
@@ -5510,11 +5493,7 @@ void emit_jalr(uint64_t rd, uint64_t rs1, uint64_t immediate) {
 
 void emit_ecall() {
   emit_instruction(encode_i_format(F12_ECALL, REG_ZR, F3_ECALL, REG_ZR, OP_SYSTEM));
- /* printf1("F12_ECALL %b \n",(char *)F12_ECALL);
-  printf1("REG_ZR %b \n",(char *)REG_ZR);
-  printf1("F3_ECALL %b \n",(char *)F3_ECALL);
-  printf1("REG_ZR %b \n",(char *)REG_ZR);
-  printf1("OP_SYSTEM %b \n",(char *)OP_SYSTEM);*/
+
   ic_ecall = ic_ecall + 1;
 }
 
@@ -8027,6 +8006,17 @@ void decode_execute() {
   }
 }
 
+void boot_loader() {
+  current_context = create_context(MY_CONTEXT, 0);
+
+  up_load_binary(current_context);
+
+  // pass binary name as first argument by replacing memory size
+  set_argument(binary_name);
+
+  up_load_arguments(current_context, number_of_remaining_arguments(), remaining_arguments());
+}
+
 void interrupt() {
   if (timer != TIMEROFF) {
     timer = timer - 1;
@@ -9143,6 +9133,8 @@ uint64_t selfie_run(uint64_t machine) {
   reset_interpreter();
   reset_microkernel();
 
+  boot_loader();
+
   current_context = create_context(MY_CONTEXT, 0);
 
   up_load_binary(current_context);
@@ -9604,8 +9596,8 @@ uint64_t init_parser_line(){
     return assembley_syntax_error_symbol();
 }
 
-uint64_t selfie_assemble() {
- // print(" selfie assembly");
+uint64_t selfie_assembler() {
+
   uint64_t link;
   uint64_t number_of_source_files;
 
@@ -9671,7 +9663,6 @@ uint64_t selfie_assemble() {
     printf2("binary length %d code length %d",binary_length,code_length);
     ELF_header = create_elf_header(binary_length, code_length);
     entry_point = ELF_ENTRY_POINT;
-    //code_length = binary_length;
     }
     return 1;
 }
@@ -9690,7 +9681,6 @@ uint64_t parse_assembly_operation(){
     code_length = binary_length;
     minilock = 0;
   }
-  //printf2(" line %d character %c ",line_number,character);
   if(character == 'a'){
     get_character();
     if(character == 'd'){
@@ -9906,10 +9896,7 @@ uint64_t parse_assembly_operation(){
             get_character();
             if(character == ' '){//.quad
               parse_assembly_argument_data_quad();
-              //printf1("previsouly  %x \n",*(binary + (binary_length / REGISTERSIZE) -1 ));
               *(binary + binary_length / REGISTERSIZE ) = imm;
-              //printf1("actually  %x \n",*(binary + (binary_length / REGISTERSIZE) ));
-
               binary_length = binary_length + REGISTERSIZE;
               return 1;
             }else return assembley_syntax_error_symbol();
@@ -9931,31 +9918,31 @@ uint64_t parse_assembly_register(){
           return REG_A0;
         
       }else if(character == '1'){
-          //&a1
+          //$a1
           return REG_A1;
       }else if(character == '2'){
        
-          //&a2
+          //$a2
           return REG_A2;
       }else if(character == '3'){
       
-          //&a3
+          //$a3
           return REG_A3;
       }else if(character == '4'){
         
-          //&a4
+          //$a4
           return REG_A4;
       }else if(character == '5'){
         
-          //&a5
+          //$a5
           return REG_A5;
       }else if(character == '6'){
        
-          //&a6
+          //$a6
           return REG_A6;
       }else if(character == '7'){
         
-          //&a7--
+          //$a7--
           return REG_A7;
       }
     }
@@ -9967,32 +9954,32 @@ uint64_t parse_assembly_register(){
           return REG_TP;
       }else if(character == '0'){
        
-          //&t0
+          //$t0
         return REG_T0;
 
       }else if(character == '1'){
        
-          //&t1
+          //$t1
         return REG_T1;
       }else if(character == '2'){
 
-          //&t2
+          //$t2
         return REG_T2;
       }else if(character == '3'){
         
-          //&t3
+          //$t3
         return REG_T3;
       }else if(character == '4'){
        
-          //&t4
+          //$t4
         return REG_T4;
       }else if(character == '5'){
         
-          //&t5
+          //$t5
         return REG_T5;
       }else if(character == '6'){
         
-          //&t6
+          //$t6
         return REG_T6;
       }
     }
@@ -10003,41 +9990,53 @@ uint64_t parse_assembly_register(){
         return REG_SP;
       }else if(character == '1'){
        
-          //&s1
+          //$s1
         return REG_S1;
       }else if(character == '2'){
        
-          //&s2
+          //$s2
         return REG_S2;
       }else if(character == '3'){
        
-          //&s3
+          //$s3
         return REG_S3;
       }else if(character == '4'){
         
-          //&s4
+          //$s4
         return REG_S4;
       }else if(character == '5'){
         
-          //&s5
+          //$s5
         return REG_S5;
       }else if(character == '6'){
 
-          //&s6
+          //$s6
         return REG_S6;
       }else if(character == '7'){
 
-          //&s6
+          //$s6
         return REG_S7;
       }else if(character == '8'){
 
-          //&s6
+          //$s6
         return REG_S8;
       }else if(character == '9'){
 
-          //&s6
+          //$s6
         return REG_S9;
-      }/*else if(character == '10'){//1010101010101010101010101010101010101010101010101010101010101010101010
+      }
+            /*
+            
+               This part have been skiped, as the stage two was more chalenging, but it can be corrected, 
+              it will need many modifications by pushing the register parser to the next charachter wich 
+              can be ',' or a line feed, and that to be done will need changes in all operation arguments 
+              parser, it wase a stupid mistake due too miss preconception, as it wasn't easy from the 
+              begining to see the hol way to acheive the project, but we can say for now, that the 
+              assembler does not handle yet the registers S10 and S11.
+
+            */
+
+      /*else if(character == '10'){  
 
           //&s6
         return REG_S10;
@@ -10515,7 +10514,7 @@ uint64_t selfie() {
       if (string_compare(option, "-c"))
         selfie_compile();
       else if (string_compare(option, "-a"))
-              selfie_assemble();
+        selfie_assembler();
       else if (number_of_remaining_arguments() == 0) {
         // remaining options have at least one argument
         print_usage();
@@ -10565,10 +10564,8 @@ int main(int argc, char** argv) {
   init_selfie((uint64_t) argc, (uint64_t*) argv);
 
   init_library();
-//    printf1("test %s ","test");
 
-  //printf("aaa\n");
-  //print(" test ooo \n");
   return selfie();
- // return 0;
+  
 }
+
