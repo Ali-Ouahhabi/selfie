@@ -1,3 +1,4 @@
+
 /*
 Copyright (c) 2015-2019, the Selfie Project authors. All rights reserved.
 Please see the AUTHORS file for details. Use of this source code is
@@ -465,6 +466,18 @@ void init_scanner () {
 }
 
 void reset_scanner() {
+  line_number = 1;
+
+  number_of_read_characters = 0;
+
+  get_character();
+
+  number_of_ignored_characters = 0;
+  number_of_comments           = 0;
+  number_of_scanned_symbols    = 0;
+}
+
+void reset_assmebly_scanner() {
   line_number = 1;
 
   number_of_read_characters = 0;
@@ -1560,7 +1573,6 @@ char*    replace_extension(char* filename, uint64_t e);
 uint64_t monster(uint64_t* to_context);
 
 uint64_t is_boot_level_zero();
-void     boot_loader();
 
 uint64_t selfie_run(uint64_t machine);
 
@@ -1702,6 +1714,7 @@ void init_selfie(uint64_t argc, uint64_t* argv) {
 // -----------------------------------------------------------------
 
 uint64_t two_to_the_power_of(uint64_t p) {
+  //printf("two_to_the_power_of procedure arguments %d \n",p );
   // assert: 0 <= p < CPUBITWIDTH
   return *(power_of_two_table + p);
 }
@@ -1716,6 +1729,7 @@ uint64_t ten_to_the_power_of(uint64_t p) {
 }
 
 uint64_t left_shift(uint64_t n, uint64_t b) {
+//print("a");
   // assert: 0 <= b < CPUBITWIDTH
   return n * two_to_the_power_of(b);
 }
@@ -1726,6 +1740,7 @@ uint64_t right_shift(uint64_t n, uint64_t b) {
 }
 
 uint64_t get_bits(uint64_t n, uint64_t i, uint64_t b) {
+ // printf(" get_bits procedure with arguments %d %d %d \n",n,i,b);
   // assert: 0 < b <= i + b < CPUBITWIDTH
   if (i == 0)
     return n % two_to_the_power_of(b);
@@ -1812,6 +1827,7 @@ uint64_t sign_shrink(uint64_t n, uint64_t b) {
 uint64_t load_character(char* s, uint64_t i) {
   // assert: i >= 0
   uint64_t a;
+  //printf(" load_character procedure with arguments %s -- %d \n",s , i);
 
   // a is the index of the double word where
   // the to-be-loaded i-th character in s is
@@ -2091,6 +2107,7 @@ uint64_t fixed_point_percentage(uint64_t r, uint64_t f) {
 }
 
 void put_character(uint64_t c) {
+ // printf("put_character procedure %c \n", (char) c);
   if (output_buffer) {
     // buffering character instead of outputting
     store_character(output_buffer, output_cursor, c);
@@ -2125,13 +2142,16 @@ void put_character(uint64_t c) {
 
 void print(char* s) {
   uint64_t i;
-
+  //printf(" print procedure\n");
+  //printf(" print procedure with argument %s \n",s);
+  //sleep(2);
   if (s == (char*) 0)
     print("NULL");
   else {
     i = 0;
-
+   // printf(" print procedure \n");
     while (load_character(s, i) != 0) {
+     // printf(" in while of print \n");
       put_character(load_character(s, i));
 
       i = i + 1;
@@ -2965,6 +2985,14 @@ void create_symbol_table_entry(uint64_t which_table, char* string, uint64_t line
   set_type(new_entry, type);
   set_value(new_entry, value);
   set_address(new_entry, address);
+/*
+  print(" creade_symbol_table_entry \n" );
+  printf1("\t string  %s\n",(char *) string);
+  printf1("\t line    %s\n",(char *) line );
+  //printf1("\t class   %s\n",(char *) class);
+  //printf1("\t type    %s\n",(char *) type);
+  printf1("\t value   %s\n",(char *) value);
+  printf1("\t address %s\n",(char *) address);*/
 
   // create entry at head of list of symbols
   if (which_table == GLOBAL_TABLE) {
@@ -3456,9 +3484,7 @@ void load_string(char* string) {
   length = string_length(string) + 1;
 
   allocated_memory = allocated_memory + round_up(length, REGISTERSIZE);
-
   create_symbol_table_entry(GLOBAL_TABLE, string, line_number, STRING, UINT64STAR_T, 0, -allocated_memory);
-
   load_integer(-allocated_memory);
 
   emit_add(current_temporary(), REG_GP, current_temporary());
@@ -4876,6 +4902,7 @@ void selfie_compile() {
 
   // implicitly declare main procedure in global symbol table
   // copy "main" string into zeroed double word to obtain unique hash
+
   create_symbol_table_entry(GLOBAL_TABLE, string_copy("main"), 0, PROCEDURE, UINT64_T, 0, 0);
 
   while (link) {
@@ -4977,7 +5004,7 @@ void print_register_name(uint64_t reg) {
 void check_immediate_range(uint64_t immediate, uint64_t bits) {
   if (is_signed_integer(immediate, bits) == 0) {
     print_line_number("encoding error", line_number);
-    printf3("%d expected between %d and %d\n",
+    printf3(" %d expected between %d and %d\n",
       (char*) immediate,
       (char*) -two_to_the_power_of(bits - 1),
       (char*) two_to_the_power_of(bits - 1) - 1);
@@ -5251,7 +5278,6 @@ uint64_t encode_u_format(uint64_t immediate, uint64_t rd, uint64_t opcode) {
   check_immediate_range(immediate, 20);
 
   immediate = sign_shrink(immediate, 20);
-
   return left_shift(left_shift(immediate, 5) + rd, 7) + opcode;
 }
 
@@ -5351,7 +5377,7 @@ uint64_t load_instruction(uint64_t baddr) {
 
 void store_instruction(uint64_t baddr, uint64_t instruction) {
   uint64_t temp;
-
+  //print("store INSTRUCTION");
   if (baddr >= MAX_CODE_LENGTH) {
     syntax_error_message("maximum code length exceeded");
 
@@ -5368,6 +5394,7 @@ void store_instruction(uint64_t baddr, uint64_t instruction) {
     temp = left_shift(instruction, WORDSIZEINBITS) + get_low_word(temp);
 
   *(binary + baddr / REGISTERSIZE) = temp;
+  //print(" end of store INSTRUCTION\n");
 }
 
 uint64_t load_data(uint64_t baddr) {
@@ -5385,12 +5412,16 @@ void store_data(uint64_t baddr, uint64_t data) {
 }
 
 void emit_instruction(uint64_t instruction) {
+  //print(" in to emit_instruction \n");
   store_instruction(binary_length, instruction);
-
+  //print("1\n");
   if (*(code_line_number + binary_length / INSTRUCTIONSIZE) == 0)
     *(code_line_number + binary_length / INSTRUCTIONSIZE) = line_number;
-
+  //print("2\n");
   binary_length = binary_length + INSTRUCTIONSIZE;
+
+ // printf1(" line %d \t:",line_number);
+ //printf1("%x\n",instruction);
 }
 
 void emit_nop() {
@@ -5479,7 +5510,11 @@ void emit_jalr(uint64_t rd, uint64_t rs1, uint64_t immediate) {
 
 void emit_ecall() {
   emit_instruction(encode_i_format(F12_ECALL, REG_ZR, F3_ECALL, REG_ZR, OP_SYSTEM));
-
+ /* printf1("F12_ECALL %b \n",(char *)F12_ECALL);
+  printf1("REG_ZR %b \n",(char *)REG_ZR);
+  printf1("F3_ECALL %b \n",(char *)F3_ECALL);
+  printf1("REG_ZR %b \n",(char *)REG_ZR);
+  printf1("OP_SYSTEM %b \n",(char *)OP_SYSTEM);*/
   ic_ecall = ic_ecall + 1;
 }
 
@@ -5698,7 +5733,6 @@ void selfie_output() {
   }
 
   // assert: binary_name is mapped and not longer than MAX_FILENAME_LENGTH
-
   fd = open_write_only(binary_name);
 
   if (signed_less_than(fd, 0)) {
@@ -7634,7 +7668,6 @@ void fetch() {
 
 void decode_execute() {
   opcode = get_opcode(ir);
-
   if (opcode == OP_IMM) {
     decode_i_format();
 
@@ -9075,17 +9108,6 @@ uint64_t is_boot_level_zero() {
   return 0;
 }
 
-void boot_loader() {
-  current_context = create_context(MY_CONTEXT, 0);
-
-  up_load_binary(current_context);
-
-  // pass binary name as first argument by replacing memory size
-  set_argument(binary_name);
-
-  up_load_arguments(current_context, number_of_remaining_arguments(), remaining_arguments());
-}
-
 uint64_t selfie_run(uint64_t machine) {
   uint64_t exit_code;
 
@@ -9121,7 +9143,14 @@ uint64_t selfie_run(uint64_t machine) {
   reset_interpreter();
   reset_microkernel();
 
-  boot_loader();
+  current_context = create_context(MY_CONTEXT, 0);
+
+  up_load_binary(current_context);
+
+  // pass binary name as first argument by replacing memory size
+  set_argument(binary_name);
+
+  up_load_arguments(current_context, number_of_remaining_arguments(), remaining_arguments());
 
   printf3("%s: selfie executing %s with %dMB physical memory on ", selfie_name,
     binary_name,
@@ -9502,7 +9531,7 @@ uint64_t* remaining_arguments() {
 }
 
 char* peek_argument() {
-  if (number_of_remaining_arguments() > 0)
+    if (number_of_remaining_arguments() > 0)
     return (char*) *selfie_argv;
   else
     return (char*) 0;
@@ -9531,6 +9560,945 @@ void print_usage() {
     "( -m | -d | -r | -n | -y | -min | -mob ) 0-4096 ... ");
 }
 
+char * line_code;
+char * assembly_operation;
+char * number;
+char * hexa;
+uint64_t minilock;
+uint64_t init_parser_line();
+uint64_t parse_assembly_operation();
+uint64_t parse_assembly_register();
+uint64_t parse_assembly_argument_lui();
+uint64_t parse_assembly_argument_addi();
+uint64_t parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+uint64_t parse_assembly_argument_ld();
+uint64_t parse_assembly_argument_sd();
+uint64_t parse_assembly_argument_beq();
+uint64_t parse_assembly_argument_jal();
+uint64_t parse_assembly_argument_jalr();
+uint64_t parse_assembly_argument_data_quad();
+uint64_t parse_number();
+uint64_t parse_hexa();
+uint64_t is_character_hexa();
+uint64_t assembley_syntax_error_symbol();
+
+uint64_t assembley_syntax_error_symbol(){
+
+print("***************************************\n");
+printf1(" assembley_syntax_error_symbol line %d ",line_number);
+print("***************************************\n");
+
+
+  exit(EXITCODE_PARSERERROR);
+}
+
+uint64_t init_parser_line(){
+  if(character == '0'){
+      // jump 0x...
+      while(character != ' ') 
+        get_character();
+      // jumb space
+      get_character();
+      return 1;
+    }
+    return assembley_syntax_error_symbol();
+}
+
+uint64_t selfie_assemble() {
+ // print(" selfie assembly");
+  uint64_t link;
+  uint64_t number_of_source_files;
+
+  minilock = 1;
+  line_code = string_alloc(100);
+  assembly_operation = string_alloc(6);
+  // link until next console option
+  link = 1;
+ 
+  number_of_source_files = 0;
+
+  source_name = "library";
+
+  binary_name = source_name;
+
+  // allocate memory for storing binary
+  binary       = zalloc(MAX_BINARY_LENGTH);
+  binary_length = 0;
+
+  // reset code length
+  code_length = 0;
+
+   // allocate zeroed memory for storing source code line numbers
+  code_line_number = zalloc(MAX_CODE_LENGTH / INSTRUCTIONSIZE * SIZEOFUINT64);
+  data_line_number = zalloc(MAX_DATA_LENGTH / REGISTERSIZE * SIZEOFUINT64);
+
+  line_number = 1;
+  reset_symbol_tables();
+
+
+  while (link) {
+    if (number_of_remaining_arguments() == 0)
+      link = 0;
+    else if (load_character(peek_argument(), 0) == '-')
+      link = 0;
+    else {
+      source_name = get_argument();
+
+      number_of_source_files = number_of_source_files + 1;
+
+      printf2("%s: selfie assembling %s with starc\n", selfie_name, source_name);
+
+      // assert: source_name is mapped and not longer than MAX_FILENAME_LENGTH
+
+      source_fd = sign_extend(open(source_name, O_RDONLY, 0), SYSCALL_BITWIDTH);
+
+      if (signed_less_than(source_fd, 0)) {
+        printf2("%s: could not open input file %s\n", selfie_name, source_name);
+
+        exit(EXITCODE_IOERROR);
+      }
+
+      reset_scanner();
+
+
+      while (character != CHAR_EOF){
+
+        parse_assembly_operation();
+        get_character();
+        line_number = line_number + 1;
+      }
+    }
+    printf2("binary length %d code length %d",binary_length,code_length);
+    ELF_header = create_elf_header(binary_length, code_length);
+    entry_point = ELF_ENTRY_POINT;
+    //code_length = binary_length;
+    }
+    return 1;
+}
+
+
+uint64_t parse_assembly_operation(){
+
+  uint64_t RISC_selfie;
+  RISC_selfie = 1;
+  if(RISC_selfie == 1){
+    init_parser_line();
+  }
+
+  if((character == '.')*minilock)
+  {
+    code_length = binary_length;
+    minilock = 0;
+  }
+  //printf2(" line %d character %c ",line_number,character);
+  if(character == 'a'){
+    get_character();
+    if(character == 'd'){
+      get_character();
+      if(character == 'd'){
+        get_character();
+        if(character == 'i'){
+          get_character();
+          
+          if(character == ' '){ //addi
+            parse_assembly_argument_addi();
+            emit_addi(rd, rs1, imm);
+            return 1;
+          }else return assembley_syntax_error_symbol();
+
+        }else if( character == ' '){//add
+          parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+          emit_add(rd, rs1, rs2);
+          return 1;
+        }else return assembley_syntax_error_symbol();
+      }
+    }
+  }
+
+  else if(character == 'b'){
+    get_character();
+    if(character == 'e'){
+      get_character();
+      if(character == 'q'){
+        get_character();
+        if(character == ' '){//beq
+          parse_assembly_argument_beq();
+          emit_beq(rs1, rs2, imm);
+          return 1;
+        }else return assembley_syntax_error_symbol();
+      }
+    }
+  }
+
+  else if (character == 'd'){
+    get_character();
+    if(character == 'i'){
+      get_character();
+      if(character == 'v'){
+        get_character();
+        if(character == 'u'){
+          get_character();
+          if(character == ' '){//divu  
+            parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+            emit_divu(rd, rs1, rs2);
+            return 1;          
+          }else return assembley_syntax_error_symbol();
+        }
+      }
+    }
+  }
+
+  else if (character == 'e'){
+    get_character();
+    if(character == 'c'){
+      get_character();
+      if(character == 'a'){
+        get_character();
+        if(character == 'l'){
+          get_character();
+          if(character == 'l'){
+            get_character();
+            if(character == CHAR_LF){//ecall
+              emit_ecall();
+              return 1;
+            }else return assembley_syntax_error_symbol();
+          }
+        }
+      }
+    }
+  }
+
+  else if(character == 'j'){
+    get_character();
+    if(character == 'a'){
+      get_character();
+      if(character == 'l'){
+        get_character();
+        if(character == ' '){// jal
+          parse_assembly_argument_jal();
+          emit_jal(rd, imm);
+          return 1;
+        }else if( character == 'r'){
+          get_character();
+          if(character == ' '){// jalr
+            parse_assembly_argument_jalr();
+            emit_jalr(rd, rs1, imm);
+            return 1;
+          }else return assembley_syntax_error_symbol();
+        }else return assembley_syntax_error_symbol();
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();
+  }
+
+  else if(character == 'l'){
+    get_character();
+    if(character == 'd' ){
+      get_character();
+      if(character == ' '){// ld
+        parse_assembly_argument_ld();
+        emit_ld(rd, rs1, imm);
+        return 1;
+      }
+    }else if(character == 'u'){
+      get_character();
+      if(character == 'i'){
+        get_character();
+        if(character == ' '){//lui
+          parse_assembly_argument_lui();
+          emit_lui(rd, imm);
+          return 1;
+        }else return assembley_syntax_error_symbol();
+      }
+    }
+  }
+
+  else if(character == 'm'){
+    get_character();
+    if(character == 'u'){
+      get_character();
+      if(character == 'l'){
+        get_character();
+        if(character == ' '){// mul
+          parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+          emit_mul(rd, rs1, rs2);
+          return 1;          
+        }else return assembley_syntax_error_symbol();
+      }
+    }
+  }
+
+  else if(character == 'n'){
+    get_character();
+    if(character == 'o'){
+      get_character();
+      if(character == 'p'){
+        get_character();
+        if(character == CHAR_LF){
+          emit_nop();
+          return 1;
+        }else return assembley_syntax_error_symbol();
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();
+  }
+
+  else if(character == 's'){
+    get_character();
+    if(character == 'd'){
+      get_character();
+      if(character == ' '){//sd
+        parse_assembly_argument_sd();
+        emit_sd(rs1, imm, rs2);
+        return 1;
+      }else return assembley_syntax_error_symbol();
+    }else if(character == 'l'){
+      get_character();
+      if(character == 't'){
+        get_character();
+        if(character == 'u'){
+          get_character();
+          if(character == ' '){//sltu
+            parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+            emit_sltu(rd, rs1, rs2);
+            return 1;
+          }else return assembley_syntax_error_symbol();
+        }
+      }
+    }else if(character == 'u'){
+      get_character();
+      if(character == 'b'){
+        get_character();
+        if(character == ' '){//sub
+          parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+          emit_sub(rd, rs1, rs2);
+          return 1;
+        }else return assembley_syntax_error_symbol();
+      }
+    }
+  }
+
+  else if(character == 'r'){
+    get_character();
+    if(character == 'e'){
+      get_character();
+      if(character == 'm'){
+        get_character();
+        if(character == 'u'){
+          get_character();
+          if(character == ' '){// remu
+            parse_assembly_argument_add_sub_mul_divu_remu_sltu();
+            emit_remu(rd, rs1, rs2);
+            return 1;            
+          }else return assembley_syntax_error_symbol();
+        }
+      }
+    }
+  }
+
+  else if(character == '.'){
+    get_character();
+    if(character == 'q'){
+      get_character();
+      if(character == 'u'){
+        get_character();
+        if(character == 'a'){
+          get_character();
+          if(character == 'd'){
+            get_character();
+            if(character == ' '){//.quad
+              parse_assembly_argument_data_quad();
+              //printf1("previsouly  %x \n",*(binary + (binary_length / REGISTERSIZE) -1 ));
+              *(binary + binary_length / REGISTERSIZE ) = imm;
+              //printf1("actually  %x \n",*(binary + (binary_length / REGISTERSIZE) ));
+
+              binary_length = binary_length + REGISTERSIZE;
+              return 1;
+            }else return assembley_syntax_error_symbol();
+          }
+        }
+      }
+    }
+  }
+  return assembley_syntax_error_symbol();
+}
+
+uint64_t parse_assembly_register(){
+  // if character is $ call this methode
+    get_character();
+    if(character == 'a'){
+      get_character();
+      if(character == '0'){
+          //$a0
+          return REG_A0;
+        
+      }else if(character == '1'){
+          //&a1
+          return REG_A1;
+      }else if(character == '2'){
+       
+          //&a2
+          return REG_A2;
+      }else if(character == '3'){
+      
+          //&a3
+          return REG_A3;
+      }else if(character == '4'){
+        
+          //&a4
+          return REG_A4;
+      }else if(character == '5'){
+        
+          //&a5
+          return REG_A5;
+      }else if(character == '6'){
+       
+          //&a6
+          return REG_A6;
+      }else if(character == '7'){
+        
+          //&a7--
+          return REG_A7;
+      }
+    }
+    else if(character == 't'){
+      get_character();
+      if(character == 'p'){
+       
+          //$tp
+          return REG_TP;
+      }else if(character == '0'){
+       
+          //&t0
+        return REG_T0;
+
+      }else if(character == '1'){
+       
+          //&t1
+        return REG_T1;
+      }else if(character == '2'){
+
+          //&t2
+        return REG_T2;
+      }else if(character == '3'){
+        
+          //&t3
+        return REG_T3;
+      }else if(character == '4'){
+       
+          //&t4
+        return REG_T4;
+      }else if(character == '5'){
+        
+          //&t5
+        return REG_T5;
+      }else if(character == '6'){
+        
+          //&t6
+        return REG_T6;
+      }
+    }
+    else if(character == 's'){
+      get_character();
+      if(character == 'p'){
+          //$sp
+        return REG_SP;
+      }else if(character == '1'){
+       
+          //&s1
+        return REG_S1;
+      }else if(character == '2'){
+       
+          //&s2
+        return REG_S2;
+      }else if(character == '3'){
+       
+          //&s3
+        return REG_S3;
+      }else if(character == '4'){
+        
+          //&s4
+        return REG_S4;
+      }else if(character == '5'){
+        
+          //&s5
+        return REG_S5;
+      }else if(character == '6'){
+
+          //&s6
+        return REG_S6;
+      }else if(character == '7'){
+
+          //&s6
+        return REG_S7;
+      }else if(character == '8'){
+
+          //&s6
+        return REG_S8;
+      }else if(character == '9'){
+
+          //&s6
+        return REG_S9;
+      }/*else if(character == '10'){//1010101010101010101010101010101010101010101010101010101010101010101010
+
+          //&s6
+        return REG_S10;
+      }else if(character == '11'){
+
+          //&s6
+        return REG_S11;
+      }*/
+    }
+    else if (character == 'f'){
+      get_character();
+      if(character == 'p'){
+
+          //$fp
+        return REG_FP;
+      }
+    }
+    else if(character == 'g'){
+      get_character();
+      if(character == 'p'){
+          //$gp
+        return REG_GP;
+      }
+    }
+    else if(character == 'r'){
+      get_character();
+      if(character == 'a'){
+
+          //$ra
+        return REG_RA;
+      }
+    }
+    else if(character == 'z'){
+      get_character();
+      if (character == 'e'){
+        get_character();
+        if(character == 'r'){
+          get_character();
+          if(character == 'o'){
+            //$zero 
+            return REG_ZR;
+
+          }
+        } 
+      }
+    }
+
+    return assembley_syntax_error_symbol();
+}
+
+uint64_t parse_assembly_argument_lui(){
+
+  get_character();
+  if(character == '$'){
+
+    rd = parse_assembly_register();
+
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(character == '0'){
+      get_character();
+      if(character == 'x'){
+        get_character();
+        imm = sign_extend(parse_hexa(),20);
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();
+  }else return assembley_syntax_error_symbol();
+
+
+  if(character == CHAR_LF){
+    return 1;
+  }else return assembley_syntax_error_symbol();
+
+  return 1;
+}
+
+uint64_t parse_assembly_argument_addi(){
+  
+  get_character();
+  if(character == '$'){
+    rd = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();
+  get_character();
+  if(character == ','){
+    get_character();
+    if(character == '$'){
+      rs1 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(is_character_digit()){
+      imm = parse_number();
+    }else if(character == '-'){
+      get_character();
+      imm = -parse_number();
+    }else return assembley_syntax_error_symbol();
+  }else return assembley_syntax_error_symbol();
+
+  if(character == CHAR_LF){
+    return 1;
+  }else return assembley_syntax_error_symbol();
+}
+
+uint64_t parse_assembly_argument_add_sub_mul_divu_remu_sltu(){
+
+  get_character();
+  if(character == '$'){
+    rd = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(character == '$'){
+      rs1 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(character == '$'){
+      rs2 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == CHAR_LF){
+    return 1;
+  }else return assembley_syntax_error_symbol();  
+}
+
+uint64_t parse_assembly_argument_ld(){
+
+  get_character();
+  if(character == '$'){
+    rd = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(is_character_digit()){
+      imm = parse_number();
+    }else if(character == '-'){
+      get_character();
+      if(is_character_digit()){
+        imm = - parse_number();
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  if(character == '('){
+    get_character();
+    if(character == '$'){
+      rs1 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ')'){
+    get_character();
+    if(character == CHAR_LF){
+      return 1;
+    }else return assembley_syntax_error_symbol(); 
+  }else return assembley_syntax_error_symbol();
+}
+
+uint64_t parse_assembly_argument_sd(){
+
+  get_character();
+  if(character == '$'){
+    rs2 = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(is_character_digit()){
+      imm = parse_number();
+    }else if(character == '-'){
+      get_character();
+      if(is_character_digit()){
+        imm = - parse_number();
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  if(character == '('){
+    get_character();
+    if(character == '$'){
+      rs1 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ')'){
+    get_character();
+    if(character == CHAR_LF){
+      return 1;
+    }else return assembley_syntax_error_symbol(); 
+  }else return assembley_syntax_error_symbol();
+  return 1;  
+}
+
+uint64_t parse_assembly_argument_beq(){
+
+  uint64_t i;
+
+  get_character();
+  if(character == '$'){
+    rs1 = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();  
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(character == '$'){
+      rs2 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(is_character_digit()){
+      imm = parse_number()*INSTRUCTIONSIZE;
+    }else if(character == '-'){
+      get_character();
+      if(is_character_digit()){
+        imm = - parse_number()*INSTRUCTIONSIZE;
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  i=0;
+  while((character != ']') * (i<30)) {
+    get_character(); 
+    i = i + 1;
+  }
+
+  if(i>30) return assembley_syntax_error_symbol();
+  else {
+    get_character();
+    if(character == CHAR_LF){
+      return 1;
+    }else return assembley_syntax_error_symbol();
+  }
+}
+
+uint64_t parse_assembly_argument_jal(){
+
+  uint64_t i;
+
+  get_character();
+  if(character == '$'){
+    rd = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();
+  
+  get_character();
+  if(character == ','){
+    get_character();
+    if(is_character_digit()){
+      imm = parse_number() * INSTRUCTIONSIZE;
+    }else if(character == '-'){
+      get_character();
+      if(is_character_digit()){
+        imm = - parse_number() * INSTRUCTIONSIZE;
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+
+ i=0;
+  while((character != ']') * (i<30)) {
+    get_character(); 
+    i = i + 1;
+  }
+
+  if(i>30) return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == CHAR_LF){
+    return 1;
+  }else return assembley_syntax_error_symbol();  
+}
+
+uint64_t parse_assembly_argument_jalr(){
+
+  get_character();
+  if(character == '$'){
+    rd = parse_assembly_register();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ','){
+    get_character();
+    if(is_character_digit()){
+      imm = parse_number() * INSTRUCTIONSIZE;
+    }else if(character == '-'){
+      get_character();
+      if(is_character_digit()){
+        imm = - parse_number() * INSTRUCTIONSIZE;
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();  
+  }else return assembley_syntax_error_symbol();
+
+  if(character == '('){
+    get_character();
+    if(character == '$'){
+      rs1 = parse_assembly_register();
+    }else return assembley_syntax_error_symbol();
+  }else return assembley_syntax_error_symbol();
+
+  get_character();
+  if(character == ')'){
+    get_character();
+    if(character == CHAR_LF){
+      return 1;
+    }else return assembley_syntax_error_symbol(); 
+  }else return assembley_syntax_error_symbol();
+}
+
+uint64_t parse_assembly_argument_data_quad(){
+
+  get_character();
+  if(character == '0'){
+    get_character();
+    if(character == 'x'){
+      get_character();
+      if(is_character_hexa()){
+        imm = parse_hexa();
+      }else return assembley_syntax_error_symbol();
+    }else return assembley_syntax_error_symbol();
+  }else return assembley_syntax_error_symbol();
+
+  if(character == CHAR_LF){
+    return 1;
+  }else return assembley_syntax_error_symbol();
+}
+
+uint64_t parse_number(){
+
+  uint64_t n ;
+  uint64_t i ;
+  number = string_alloc(MAX_INTEGER_LENGTH);
+  // as long as the caracters is a digit store it in number 
+  i = 0;
+  while((i<MAX_INTEGER_LENGTH) * (is_character_digit())){
+
+    store_character(number,i,character);
+    get_character();
+    i = i + 1;
+  }
+  store_character(number,i,0);
+  n = atoi((char*) number);
+  return n;
+}
+
+
+uint64_t is_character_hexa(){
+
+    if(is_character_digit())
+      return 1;
+
+    if (character >= 'A')
+      if (character <= 'F')
+        return 1;
+      else
+        return 0;
+    else
+      return 0;
+
+}
+
+// convert hex to decimal
+
+uint64_t hexatoi(char* s) {
+  uint64_t i;
+  uint64_t n;
+  uint64_t c;
+
+  i = 0;
+  n = 0;
+  c = load_character(s, i);
+   // x=(getNum(s))*16+(getNum(s+1));
+   // loop until s is terminated
+   while (c != 0) {
+     // the numerical value of ASCII-encoded decimal digits
+     // is offset by the ASCII code of '0' (which is 48)
+    if((c>='0') * (c<='9'))
+      c = c - '0' ; 
+    else if( (c>= 'A') + (c<='B'))
+      c = c - 'A' +10;
+    else {
+      // s contains a decimal number larger than UINT64_MAX
+      printf2("%s: cannot convert out-of-bound number %s\n", selfie_name, s);
+
+      exit(EXITCODE_BADARGUMENTS);
+      }
+    
+
+    // assert: s contains a hexadecimal number
+
+    // use base 16 but detect wrap around
+    if (n < UINT64_MAX / 10)
+      n = n * 16 + c;
+    else if (n == UINT64_MAX / 10)
+      if (c <= UINT64_MAX % 10)
+        n = n * 16 + c;
+      else {
+        // s contains a decimal number larger than UINT64_MAX
+        printf2("%s: cannot convert out-of-bound number %s\n", selfie_name, s);
+
+        exit(EXITCODE_BADARGUMENTS);
+      }
+    else {
+      // s contains a decimal number larger than UINT64_MAX
+      printf2("%s: cannot convert out-of-bound number %s\n", selfie_name, s);
+
+      exit(EXITCODE_BADARGUMENTS);
+    }
+
+    // go to the next digit
+    i = i + 1;
+
+    // load character (one byte) at index i in s from memory requires
+    // bit shifting since memory access can only be done in double words
+    c = load_character(s, i);
+
+  }
+
+  return n;
+}
+
+uint64_t parse_hexa(){
+
+  uint64_t i ;
+  i = 0;
+  hexa = string_alloc(MAX_INTEGER_LENGTH);
+ 
+  while((is_character_digit() + is_character_hexa()) * (i<MAX_INTEGER_LENGTH)){
+
+    store_character(hexa , i, character);
+    get_character();
+    i = i + 1;
+  }
+
+  store_character(hexa , i , 0);
+
+  return hexatoi((char*)hexa);
+}
+
+
+
 uint64_t selfie() {
   char* option;
 
@@ -9546,7 +10514,8 @@ uint64_t selfie() {
 
       if (string_compare(option, "-c"))
         selfie_compile();
-
+      else if (string_compare(option, "-a"))
+              selfie_assemble();
       else if (number_of_remaining_arguments() == 0) {
         // remaining options have at least one argument
         print_usage();
@@ -9587,11 +10556,19 @@ uint64_t selfie() {
   return EXITCODE_NOERROR;
 }
 
+
+
 // selfie bootstraps int and char** to uint64_t and uint64_t*, respectively!
 int main(int argc, char** argv) {
+
+  
   init_selfie((uint64_t) argc, (uint64_t*) argv);
 
   init_library();
+//    printf1("test %s ","test");
 
+  //printf("aaa\n");
+  //print(" test ooo \n");
   return selfie();
+ // return 0;
 }
